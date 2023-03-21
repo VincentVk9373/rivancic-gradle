@@ -1,0 +1,59 @@
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
+
+task clean(type: Delete) {
+    group = 'files'
+    description = 'deleting files'
+
+    delete project.layout.buildDirectory
+}
+
+task sortFiles(type: DefaultTask) {
+    group = 'files'
+    description = 'attempting to move files around'
+
+    doLast {
+        def folder = file(project.ext['tasks.files.folder'])
+        def groupBy = FileGroupBy.of(project.ext['tasks.files.sortType'])
+        logger.lifecycle("${this.name}:$name sorting by $groupBy folder $folder")
+        folder.listFiles({ it.isFile() } as FileFilter)
+                .each {
+                    def group = groupBy.group(it)
+                    def targetDir = project.layout.buildDirectory.dir("files/$group").get()
+                    def targetFile = Path.of(targetDir.toString(), it.name)
+                    logger.quiet("Copying file $it to $targetFile")
+                    mkdir targetDir
+                    Files.copy(it.toPath(), targetFile, StandardCopyOption.REPLACE_EXISTING)
+                }
+    }
+    dependsOn tasks.named('clean')
+}
+
+enum FileGroupBy {
+    extension{
+        def group(File file) { file.name.substring(file.name.lastIndexOf('.') + 1) }
+    },
+    date{
+        DateTimeFormatter monthYearFormater = DateTimeFormatter.ofPattern("MM-YYYY")
+
+        def group(File file) {
+            def creationTime = Files.getAttribute(Path.of(file.path), 'creationTime')
+            monthYearFormater.format(Instant.ofEpochMilli(creationTime.toMillis()).atZone(ZoneOffset.UTC).toLocalDate())
+        }
+    };
+
+    abstract def group(File file)
+
+    static def of(groupBy) {
+        def selected = values().find { it.name() == groupBy }
+        if (selected == null) {
+            throw new IllegalArgumentException("unknown group by ${groupBy}")
+        }
+        selected
+    }
+}

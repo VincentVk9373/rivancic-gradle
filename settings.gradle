@@ -1,0 +1,3 @@
+rootProject.name = 'rivancic'
+include ':task/file-tasks-assignment'
+project(':task/file-tasks-assignment').name = "files-task"
